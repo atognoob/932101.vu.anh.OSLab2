@@ -20,16 +20,9 @@ void sigHupHandler(int sigNumber) {
 
 int main() {
     int serverFD;   //представляет файловый дескриптор сервера сокетов.
-    int incomingSocketFD = 0; //представляет файловый дескриптор соединения с принимаемым сокетом.
-    struct sockaddr_in socketAddress;   
-    int addressLength = sizeof(socketAddress);
-    fd_set readfds;
     struct sigaction sa;
     sigset_t blockedMask, origMask;
-    char buffer[1024] = { 0 };
-    int readBytes;
-    int maxSd;
-    int signalOrConnectionCount = 0;
+    
 
     // создаем сокет
     if ((serverFD = socket(AF_INET, SOCK_STREAM, 0)) == 0) {        //IPv4/TCP
@@ -38,18 +31,19 @@ int main() {
     }
 
     // настройки адреса сокета
+    struct sockaddr_in socketAddress;   
     socketAddress.sin_family = AF_INET;
     socketAddress.sin_addr.s_addr = INADDR_ANY;
     socketAddress.sin_port = htons(PORT);
-
+    int addressLength = sizeof(socketAddress);
     // привязываем сокет к адресу
     if (bind(serverFD, (struct sockaddr*)&socketAddress, sizeof(socketAddress)) < 0) {
-        perror("bind error");
+        perror("bind failed");
         exit(EXIT_FAILURE);
     }
 
     if (listen(serverFD, BACKLOG) < 0) {
-        perror("listen error");
+        perror("listen failed");
         exit(EXIT_FAILURE);
     }
 
@@ -66,6 +60,11 @@ int main() {
     sigemptyset(&origMask);
     sigaddset(&blockedMask, SIGHUP);
     sigprocmask(SIG_BLOCK, &blockedMask, &origMask);
+   
+    fd_set readfds;
+    int signalOrConnectionCount = 0;
+    int maxSd;
+    int incomingSocketFD = 0; //представляет файловый дескриптор соединения с принимаемым сокетом.
    
     //Работа основного цикла
     while (signalOrConnectionCount < 3) {
@@ -94,6 +93,8 @@ int main() {
         }
         }
 
+        char buffer[1024] = { 0 };
+        int readBytes;
         // Чтение входящих байтов
         if (incomingSocketFD > 0 && FD_ISSET(incomingSocketFD, &readfds)) { 
             readBytes = read(incomingSocketFD, buffer, 1024);
