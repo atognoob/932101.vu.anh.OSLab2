@@ -26,7 +26,7 @@ int main() {
 
     // создаем сокет
     if ((serverFD = socket(AF_INET, SOCK_STREAM, 0)) == 0) {        //IPv4/TCP
-        perror("create error");
+        perror("socket creation failed");
         exit(EXIT_FAILURE);
     }
 
@@ -42,12 +42,12 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    if (listen(serverFD, BACKLOG) < 0) {
+    if (listen(serverFD, BACKLOG) == -1) {
         perror("listen failed");
         exit(EXIT_FAILURE);
     }
 
-    printf("Server started on port %d \n", PORT);
+    printf("Server listening on port %d \n", PORT);
 
     // Регистрация обработчика сигнала
     sigaction(SIGHUP, NULL, &sa);
@@ -62,60 +62,61 @@ int main() {
     sigprocmask(SIG_BLOCK, &blockedMask, &origMask);
    
     fd_set readfds;
-    int signalOrConnectionCount = 0;
+    int countConnection = 0;
     int maxSd;
-    int incomingSocketFD = 0; //представляет файловый дескриптор соединения с принимаемым сокетом.
+    int socket2 = 0; //представляет файловый дескриптор соединения с принимаемым сокетом.
    
     //Работа основного цикла
-    while (signalOrConnectionCount < 3) {
+    while (countConnection < 5) {
         FD_ZERO(&readfds); 
         FD_SET(serverFD, &readfds); 
         
-        if (incomingSocketFD > 0) { 
-            FD_SET(incomingSocketFD, &readfds); 
+        if (socket2 > 0) { 
+            FD_SET(socket2, &readfds); 
         } 
         
-        maxSd = (incomingSocketFD > serverFD) ? incomingSocketFD : serverFD; 
- 
+        maxSd = (socket2 > serverFD) ? socket2 : serverFD; 
+
+        //вызов pselect
         if (pselect(maxSd + 1, &readfds, NULL, NULL, NULL, &origMask) == -1) { 
-        if (errno != EINTR) {
-            perror("pselect error"); 
-            exit(EXIT_FAILURE); 
+            if (errno != EINTR) {
+                perror("pselect error"); 
+                exit(EXIT_FAILURE); 
             }
-        if (errno == EINTR){
+            if (errno == EINTR){
             // Получение проверки сигнала SIGHUP
-        	if(wasSigHup==1){
-        		printf("SIGHUP received.\n");
-  			    wasSigHup = 0;
-            	signalOrConnectionCount++;
-                continue;
-        	}
-        }
+        	    if(wasSigHup){
+        		    printf("SIGHUP signal received.\n");
+  			        wasSigHup = 0;
+            	    countConnection++;
+                    continue;
+        	    }
+            }
         }
 
         char buffer[1024] = { 0 };
         int readBytes;
         // Чтение входящих байтов
-        if (incomingSocketFD > 0 && FD_ISSET(incomingSocketFD, &readfds)) { 
-            readBytes = read(incomingSocketFD, buffer, 1024);
+        if (socket2 > 0 && FD_ISSET(socket2, &readfds)) { 
+            readBytes = read(socket2, buffer, 1024);
 
             if (readBytes > 0) { 
                 printf("Received data: %d bytes\n", readBytes); 
             } else {
                 if (readBytes == 0) {
-                    close(incomingSocketFD); 
-                    incomingSocketFD = 0; 
+                    close(socket2); 
+                    socket2 = 0; 
                 } else { 
                     perror("read error"); 
                 } 
-                signalOrConnectionCount++;   
+                countConnection++;   
             } 
             continue;
         }
         
         // Проверка входящих соединений
         if (FD_ISSET(serverFD, &readfds)) {
-            if ((incomingSocketFD = accept(serverFD, (struct sockaddr*)&socketAddress, (socklen_t*)&addressLength)) < 0) {
+            if ((socket2 = accept(serverFD, (struct sockaddr*)&socketAddress, (socklen_t*)&addressLength)) < 0) {
                 perror("accept error");
                 exit(EXIT_FAILURE);
             }
