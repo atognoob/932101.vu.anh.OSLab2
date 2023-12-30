@@ -63,7 +63,7 @@ int main() {
    
     fd_set readfds;
     int countConnection = 0;
-    int maxSd;
+    int maxFd;
     int socket2 = 0; //представляет файловый дескриптор соединения с принимаемым сокетом.
    
     //Работа основного цикла
@@ -75,10 +75,14 @@ int main() {
             FD_SET(socket2, &readfds); 
         } 
         
-        maxSd = (socket2 > serverFD) ? socket2 : serverFD; 
+        if(socket2 > serverFD){
+            maxFd = socket2;
+        } else {
+            maxFd = serverFD;
+        }
 
         //вызов pselect
-        if (pselect(maxSd + 1, &readfds, NULL, NULL, NULL, &origMask) == -1) { 
+        if (pselect(maxFd + 1, &readfds, NULL, NULL, NULL, &origMask) == -1) { 
             if (errno != EINTR) {
                 perror("pselect error"); 
                 exit(EXIT_FAILURE); 
@@ -95,10 +99,10 @@ int main() {
         }
 
         char buffer[1024] = { 0 };
-        int readBytes;
+    
         // Чтение входящих байтов
         if (socket2 > 0 && FD_ISSET(socket2, &readfds)) { 
-            readBytes = read(socket2, buffer, 1024);
+            int readBytes = read(socket2, buffer, 1024);
 
             if (readBytes > 0) { 
                 printf("Received data: %d bytes\n", readBytes); 
